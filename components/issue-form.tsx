@@ -1,51 +1,63 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
 
 const issueSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200, 'Title too long'),
-  description: z.string().min(1, 'Description is required'),
-  status: z.enum(['open', 'closed']).optional().default('open'),
-  priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
-  assigned_to: z.number().optional(),
+  title: z.string().min(1, "Title is required").max(200, "Title too long"),
+  description: z.string().min(1, "Description is required"),
+  status: z.enum(["open", "closed"]).optional().default("open"),
+  priority: z.enum(["low", "medium", "high"]).optional().default("medium"),
+  assigned_to: z.string().optional(),
 });
 
 type IssueForm = z.infer<typeof issueSchema>;
 
 interface User {
-  id: number;
+  id: string;
   email: string;
   role: string;
 }
 
 interface Issue {
-  id: number;
+  id: string;
   title: string;
   description: string;
-  status: 'open' | 'closed';
-  priority: 'low' | 'medium' | 'high';
-  assigned_to?: number;
+  status: "open" | "closed";
+  priority: "low" | "medium" | "high";
+  assigned_to?: string;
 }
 
 interface IssueFormProps {
   issue?: Issue;
-  mode: 'create' | 'edit';
+  mode: "create" | "edit";
 }
 
 export function IssueForm({ issue, mode }: IssueFormProps) {
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const router = useRouter();
@@ -58,21 +70,24 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
     formState: { errors },
   } = useForm<IssueForm>({
     resolver: zodResolver(issueSchema),
-    defaultValues: issue ? {
-      title: issue.title,
-      description: issue.description,
-      status: issue.status,
-      priority: issue.priority,
-      assigned_to: issue.assigned_to,
-    } : {
-      status: 'open',
-      priority: 'medium',
-    },
+    defaultValues: issue
+      ? {
+          title: issue.title,
+          description: issue.description,
+          status: issue.status,
+          priority: issue.priority,
+          assigned_to: issue.assigned_to || "unassigned",
+        }
+      : {
+          status: "open",
+          priority: "medium",
+          assigned_to: "unassigned",
+        },
   });
 
-  const watchedStatus = watch('status');
-  const watchedPriority = watch('priority');
-  const watchedAssignedTo = watch('assigned_to');
+  const watchedStatus = watch("status");
+  const watchedPriority = watch("priority");
+  const watchedAssignedTo = watch("assigned_to");
 
   useEffect(() => {
     fetchUsers();
@@ -80,39 +95,47 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/users');
+      const response = await fetch("/api/users");
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
       }
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      console.error("Failed to fetch users:", err);
     }
   };
 
   const onSubmit = async (data: IssueForm) => {
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const url = mode === 'create' ? '/api/issues' : `/api/issues/${issue?.id}`;
-      const method = mode === 'create' ? 'POST' : 'PUT';
+      // Convert "unassigned" to null for the assigned_to field
+      const submitData = {
+        ...data,
+        assigned_to:
+          data.assigned_to === "unassigned" ? null : data.assigned_to,
+      };
+
+      const url =
+        mode === "create" ? "/api/issues" : `/api/issues/${issue?.id}`;
+      const method = mode === "create" ? "POST" : "PUT";
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submitData),
       });
 
       if (!response.ok) {
         const result = await response.json();
-        throw new Error(result.error || 'Failed to save issue');
+        throw new Error(result.error || "Failed to save issue");
       }
 
-      router.push('/');
+      router.push("/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -123,13 +146,12 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
       <Card>
         <CardHeader>
           <CardTitle>
-            {mode === 'create' ? 'Create New Issue' : 'Edit Issue'}
+            {mode === "create" ? "Create New Issue" : "Edit Issue"}
           </CardTitle>
           <CardDescription>
-            {mode === 'create'
-              ? 'Describe the issue you want to report'
-              : 'Update the issue details'
-            }
+            {mode === "create"
+              ? "Describe the issue you want to report"
+              : "Update the issue details"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -138,12 +160,14 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
               <Label htmlFor="title">Title</Label>
               <Input
                 id="title"
-                {...register('title')}
+                {...register("title")}
                 placeholder="Enter issue title"
                 className="w-full"
               />
               {errors.title && (
-                <p className="text-sm text-red-600">{errors.title.message}</p>
+                <p className="text-sm text-red-600 mt-1">
+                  {errors.title.message}
+                </p>
               )}
             </div>
 
@@ -151,12 +175,14 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                {...register('description')}
+                {...register("description")}
                 placeholder="Describe the issue in detail"
                 className="w-full min-h-32"
               />
               {errors.description && (
-                <p className="text-sm text-red-600">{errors.description.message}</p>
+                <p className="text-sm text-red-600 mt-1">
+                  {errors.description.message}
+                </p>
               )}
             </div>
 
@@ -165,7 +191,9 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
                 <Label>Status</Label>
                 <Select
                   value={watchedStatus}
-                  onValueChange={(value) => setValue('status', value as 'open' | 'closed')}
+                  onValueChange={(value) =>
+                    setValue("status", value as "open" | "closed")
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
@@ -181,7 +209,9 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
                 <Label>Priority</Label>
                 <Select
                   value={watchedPriority}
-                  onValueChange={(value) => setValue('priority', value as 'low' | 'medium' | 'high')}
+                  onValueChange={(value) =>
+                    setValue("priority", value as "low" | "medium" | "high")
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
@@ -197,16 +227,16 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
               <div className="space-y-2">
                 <Label>Assign To</Label>
                 <Select
-                  value={watchedAssignedTo?.toString()}
-                  onValueChange={(value) => setValue('assigned_to', value ? parseInt(value) : undefined)}
+                  value={watchedAssignedTo || "unassigned"}
+                  onValueChange={(value) => setValue("assigned_to", value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select assignee" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
                     {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id.toString()}>
+                      <SelectItem key={user.id} value={user.id}>
                         {user.email}
                       </SelectItem>
                     ))}
@@ -224,12 +254,13 @@ export function IssueForm({ issue, mode }: IssueFormProps) {
             <div className="flex gap-4">
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {mode === 'create' ? 'Create Issue' : 'Update Issue'}
+                {mode === "create" ? "Creating Issue..." : "Updating Issue..."}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => router.back()}
+                disabled={isLoading}
               >
                 Cancel
               </Button>

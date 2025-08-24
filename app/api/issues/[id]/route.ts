@@ -1,33 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/database';
-import { issueSchema } from '@/lib/validations';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/database";
+import { issueSchema } from "@/lib/validations";
+import { z } from "zod";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const issueId = parseInt(params.id);
-    if (isNaN(issueId)) {
-      return NextResponse.json({ error: 'Invalid issue ID' }, { status: 400 });
-    }
+    const issueId = params.id;
 
-    const issue = db.prepare(`
-      SELECT 
-        i.*,
-        author.id as author_id,
-        author.email as author_email,
-        assignee.id as assignee_id,
-        assignee.email as assignee_email
-      FROM issues i
-      LEFT JOIN users author ON i.created_by = author.id
-      LEFT JOIN users assignee ON i.assigned_to = assignee.id
-      WHERE i.id = ?
-    `).get(issueId) as any;
+    const { data: issue, error } = await supabase
+      .from("issues")
+      .select(
+        `
+        *,
+        author:users!created_by(id, email),
+        assignee:users!assigned_to(id, email)
+      `
+      )
+      .eq("id", issueId)
+      .single();
 
-    if (!issue) {
-      return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
+    if (error) {
+      if (error.code === "PGRST116") {
+        return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+      }
+      throw error;
     }
 
     const formattedIssue = {
@@ -40,20 +39,15 @@ export async function GET(
       assigned_to: issue.assigned_to,
       created_at: issue.created_at,
       updated_at: issue.updated_at,
-      author: issue.author_id ? {
-        id: issue.author_id,
-        email: issue.author_email
-      } : null,
-      assignee: issue.assignee_id ? {
-        id: issue.assignee_id,
-        email: issue.assignee_email
-      } : null,
+      author: issue.author,
+      assignee: issue.assignee,
     };
 
     return NextResponse.json(formattedIssue);
   } catch (error) {
+    console.error("Error fetching issue:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -64,54 +58,55 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = parseInt(request.headers.get('X-User-Id') || '0');
-    const userRole = request.headers.get('X-User-Role');
-    const issueId = parseInt(params.id);
-    
-    if (isNaN(issueId)) {
-      return NextResponse.json({ error: 'Invalid issue ID' }, { status: 400 });
-    }
+    const userId = request.headers.get("X-User-Id") || "";
+    const userRole = request.headers.get("X-User-Role");
+    const issueId = params.id;
 
     // Check if issue exists and get current data
-    const existingIssue = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId) as any;
-    if (!existingIssue) {
-      return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
+    const { data: existingIssue, error: fetchError } = await supabase
+      .from("issues")
+      .select("*")
+      .eq("id", issueId)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === "PGRST116") {
+        return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+      }
+      throw fetchError;
     }
 
     // Check permissions: admin can edit any issue, user can only edit their own
-    if (userRole !== 'admin' && existingIssue.created_by !== userId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (userRole !== "admin" && existingIssue.created_by !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await request.json();
     const data = issueSchema.parse(body);
 
-    db.prepare(`
-      UPDATE issues 
-      SET title = ?, description = ?, status = ?, priority = ?, assigned_to = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-      data.title,
-      data.description,
-      data.status,
-      data.priority,
-      data.assigned_to || null,
-      issueId
-    );
+    const { data: issue, error: updateError } = await supabase
+      .from("issues")
+      .update({
+        title: data.title,
+        description: data.description,
+        status: data.status,
+        priority: data.priority,
+        assigned_to: data.assigned_to || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", issueId)
+      .select(
+        `
+        *,
+        author:users!created_by(id, email),
+        assignee:users!assigned_to(id, email)
+      `
+      )
+      .single();
 
-    // Get updated issue with user data
-    const issue = db.prepare(`
-      SELECT 
-        i.*,
-        author.id as author_id,
-        author.email as author_email,
-        assignee.id as assignee_id,
-        assignee.email as assignee_email
-      FROM issues i
-      LEFT JOIN users author ON i.created_by = author.id
-      LEFT JOIN users assignee ON i.assigned_to = assignee.id
-      WHERE i.id = ?
-    `).get(issueId) as any;
+    if (updateError) {
+      throw updateError;
+    }
 
     const formattedIssue = {
       id: issue.id,
@@ -123,27 +118,22 @@ export async function PUT(
       assigned_to: issue.assigned_to,
       created_at: issue.created_at,
       updated_at: issue.updated_at,
-      author: issue.author_id ? {
-        id: issue.author_id,
-        email: issue.author_email
-      } : null,
-      assignee: issue.assignee_id ? {
-        id: issue.assignee_id,
-        email: issue.assignee_email
-      } : null,
+      author: issue.author,
+      assignee: issue.assignee,
     };
 
     return NextResponse.json(formattedIssue);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid input', details: error.errors },
+        { error: "Invalid input", details: error.errors },
         { status: 400 }
       );
     }
 
+    console.error("Error updating issue:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -154,31 +144,43 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = parseInt(request.headers.get('X-User-Id') || '0');
-    const userRole = request.headers.get('X-User-Role');
-    const issueId = parseInt(params.id);
-    
-    if (isNaN(issueId)) {
-      return NextResponse.json({ error: 'Invalid issue ID' }, { status: 400 });
-    }
+    const userId = request.headers.get("X-User-Id") || "";
+    const userRole = request.headers.get("X-User-Role");
+    const issueId = params.id;
 
     // Check if issue exists
-    const existingIssue = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId) as any;
-    if (!existingIssue) {
-      return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
+    const { data: existingIssue, error: fetchError } = await supabase
+      .from("issues")
+      .select("*")
+      .eq("id", issueId)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === "PGRST116") {
+        return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+      }
+      throw fetchError;
     }
 
     // Check permissions: admin can delete any issue, user can only delete their own
-    if (userRole !== 'admin' && existingIssue.created_by !== userId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (userRole !== "admin" && existingIssue.created_by !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    db.prepare('DELETE FROM issues WHERE id = ?').run(issueId);
+    const { error: deleteError } = await supabase
+      .from("issues")
+      .delete()
+      .eq("id", issueId);
 
-    return NextResponse.json({ message: 'Issue deleted successfully' });
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    return NextResponse.json({ message: "Issue deleted successfully" });
   } catch (error) {
+    console.error("Error deleting issue:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

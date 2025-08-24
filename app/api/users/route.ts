@@ -1,13 +1,21 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/database';
+import { NextResponse } from "next/server";
+import { supabase } from "@/lib/database";
 
 export async function GET() {
   try {
-    const users = db.prepare('SELECT id, email, role FROM users').all();
-    return NextResponse.json(users);
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("id, email, role");
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(users || []);
   } catch (error) {
+    console.error("Error fetching users:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { IssueForm } from '@/components/issue-form';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { IssueForm } from "@/components/issue-form";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface PageProps {
   params: { id: string };
@@ -13,14 +13,9 @@ export default function EditIssuePage({ params }: PageProps) {
   const [issue, setIssue] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const issueId = parseInt(params.id);
+  const issueId = params.id;
 
   useEffect(() => {
-    if (isNaN(issueId)) {
-      router.push('/');
-      return;
-    }
-
     fetchIssue();
   }, [issueId]);
 
@@ -31,11 +26,11 @@ export default function EditIssuePage({ params }: PageProps) {
         const data = await response.json();
         setIssue(data);
       } else if (response.status === 404) {
-        router.push('/');
+        router.push("/");
       }
     } catch (error) {
-      console.error('Failed to fetch issue:', error);
-      router.push('/');
+      console.error("Failed to fetch issue:", error);
+      router.push("/");
     } finally {
       setIsLoading(false);
     }

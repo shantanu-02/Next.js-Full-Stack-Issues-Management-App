@@ -1,32 +1,32 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Edit, Trash2, MessageSquare, ArrowLeft, Loader2 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Edit, Trash2, MessageSquare, ArrowLeft, Loader2 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 interface User {
-  id: number;
+  id: string;
   email: string;
 }
 
 interface Issue {
-  id: number;
+  id: string;
   title: string;
   description: string;
-  status: 'open' | 'closed';
-  priority: 'low' | 'medium' | 'high';
-  created_by: number;
-  assigned_to?: number;
+  status: "open" | "closed";
+  priority: "low" | "medium" | "high";
+  created_by: string;
+  assigned_to?: string;
   created_at: string;
   updated_at: string;
   author?: User;
@@ -34,24 +34,24 @@ interface Issue {
 }
 
 interface Comment {
-  id: number;
-  issue_id: number;
-  user_id: number;
+  id: string;
+  issue_id: string;
+  user_id: string;
   content: string;
   created_at: string;
   author?: User;
 }
 
 const commentSchema = z.object({
-  content: z.string().min(1, 'Comment content is required'),
+  content: z.string().min(1, "Comment content is required"),
 });
 
 type CommentForm = z.infer<typeof commentSchema>;
 
 interface IssueDetailProps {
-  issueId: number;
+  issueId: string;
   currentUser: {
-    id: number;
+    id: string;
     email: string;
     role: string;
   };
@@ -62,7 +62,7 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const router = useRouter();
 
   const {
@@ -86,10 +86,10 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
         const data = await response.json();
         setIssue(data);
       } else if (response.status === 404) {
-        router.push('/');
+        router.push("/");
       }
     } catch (error) {
-      console.error('Failed to fetch issue:', error);
+      console.error("Failed to fetch issue:", error);
     } finally {
       setIsLoading(false);
     }
@@ -103,41 +103,41 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
         setComments(data);
       }
     } catch (error) {
-      console.error('Failed to fetch comments:', error);
+      console.error("Failed to fetch comments:", error);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this issue?')) return;
+    if (!confirm("Are you sure you want to delete this issue?")) return;
 
     try {
       const response = await fetch(`/api/issues/${issueId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (response.ok) {
-        router.push('/');
+        router.push("/");
       } else {
         const result = await response.json();
-        setError(result.error || 'Failed to delete issue');
+        setError(result.error || "Failed to delete issue");
       }
     } catch (error) {
-      setError('Failed to delete issue');
+      setError("Failed to delete issue");
     }
   };
 
   const toggleStatus = async () => {
     if (!issue) return;
-    
-    const newStatus = issue.status === 'open' ? 'closed' : 'open';
-    
+
+    const newStatus = issue.status === "open" ? "closed" : "open";
+
     // Optimistic update
     setIssue({ ...issue, status: newStatus });
 
     try {
       const response = await fetch(`/api/issues/${issueId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...issue, status: newStatus }),
       });
 
@@ -145,23 +145,23 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
         // Revert optimistic update
         setIssue({ ...issue, status: issue.status });
         const result = await response.json();
-        setError(result.error || 'Failed to update issue');
+        setError(result.error || "Failed to update issue");
       }
     } catch (error) {
       // Revert optimistic update
       setIssue({ ...issue, status: issue.status });
-      setError('Failed to update issue');
+      setError("Failed to update issue");
     }
   };
 
   const onSubmitComment = async (data: CommentForm) => {
     setIsSubmitting(true);
-    setError('');
+    setError("");
 
     try {
       const response = await fetch(`/api/issues/${issueId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
@@ -171,30 +171,34 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
         reset();
       } else {
         const result = await response.json();
-        setError(result.error || 'Failed to add comment');
+        setError(result.error || "Failed to add comment");
       }
     } catch (error) {
-      setError('Failed to add comment');
+      setError("Failed to add comment");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const canEditIssue = (issue: Issue) => {
-    return currentUser.role === 'admin' || issue.created_by === currentUser.id;
+    return currentUser.role === "admin" || issue.created_by === currentUser.id;
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'destructive';
-      case 'medium': return 'default';
-      case 'low': return 'secondary';
-      default: return 'default';
+      case "high":
+        return "destructive";
+      case "medium":
+        return "default";
+      case "low":
+        return "secondary";
+      default:
+        return "default";
     }
   };
 
   const getStatusColor = (status: string) => {
-    return status === 'open' ? 'default' : 'secondary';
+    return status === "open" ? "default" : "secondary";
   };
 
   if (isLoading) {
@@ -230,11 +234,7 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          onClick={() => router.back()}
-          className="mb-4"
-        >
+        <Button variant="ghost" onClick={() => router.back()} className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
@@ -261,7 +261,7 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
                 onClick={toggleStatus}
                 disabled={!canEditIssue(issue)}
               >
-                {issue.status === 'open' ? 'Close Issue' : 'Reopen Issue'}
+                {issue.status === "open" ? "Close Issue" : "Reopen Issue"}
               </Button>
               {canEditIssue(issue) && (
                 <>
@@ -272,10 +272,7 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
                     <Edit className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={handleDelete}
-                  >
+                  <Button variant="destructive" onClick={handleDelete}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete
                   </Button>
@@ -285,14 +282,20 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-700 mb-4 whitespace-pre-wrap">{issue.description}</p>
+          <p className="text-gray-700 mb-4 whitespace-pre-wrap">
+            {issue.description}
+          </p>
           <div className="text-sm text-gray-500 space-y-1 border-t pt-3">
-            <div>Created by {issue.author?.email} {formatDistanceToNow(new Date(issue.created_at))} ago</div>
-            {issue.assignee && (
-              <div>Assigned to {issue.assignee.email}</div>
-            )}
+            <div>
+              Created by {issue.author?.email}{" "}
+              {formatDistanceToNow(new Date(issue.created_at))} ago
+            </div>
+            {issue.assignee && <div>Assigned to {issue.assignee.email}</div>}
             {issue.updated_at !== issue.created_at && (
-              <div>Last updated {formatDistanceToNow(new Date(issue.updated_at))} ago</div>
+              <div>
+                Last updated {formatDistanceToNow(new Date(issue.updated_at))}{" "}
+                ago
+              </div>
             )}
           </div>
         </CardContent>
@@ -310,15 +313,19 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
           {/* Add Comment Form */}
           <form onSubmit={handleSubmit(onSubmitComment)} className="space-y-3">
             <Textarea
-              {...register('content')}
+              {...register("content")}
               placeholder="Add a comment..."
               className="min-h-20"
             />
             {errors.content && (
-              <p className="text-sm text-red-600">{errors.content.message}</p>
+              <p className="text-sm text-red-600 mt-1">
+                {errors.content.message}
+              </p>
             )}
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
               Add Comment
             </Button>
           </form>
@@ -344,7 +351,9 @@ export function IssueDetail({ issueId, currentUser }: IssueDetailProps) {
                       {formatDistanceToNow(new Date(comment.created_at))} ago
                     </span>
                   </div>
-                  <p className="text-gray-700 whitespace-pre-wrap">{comment.content}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {comment.content}
+                  </p>
                 </div>
               ))}
             </div>

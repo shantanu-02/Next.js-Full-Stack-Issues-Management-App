@@ -1,45 +1,45 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/database';
-import { commentSchema } from '@/lib/validations';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/database";
+import { commentSchema } from "@/lib/validations";
+import { z } from "zod";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const issueId = parseInt(params.id);
-    if (isNaN(issueId)) {
-      return NextResponse.json({ error: 'Invalid issue ID' }, { status: 400 });
+    const issueId = params.id;
+
+    const { data: comments, error } = await supabase
+      .from("comments")
+      .select(
+        `
+        *,
+        author:users!user_id(id, email)
+      `
+      )
+      .eq("issue_id", issueId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw error;
     }
 
-    const comments = db.prepare(`
-      SELECT 
-        c.*,
-        u.id as author_id,
-        u.email as author_email
-      FROM comments c
-      LEFT JOIN users u ON c.user_id = u.id
-      WHERE c.issue_id = ?
-      ORDER BY c.created_at ASC
-    `).all(issueId) as any[];
-
-    const formattedComments = comments.map(comment => ({
-      id: comment.id,
-      issue_id: comment.issue_id,
-      user_id: comment.user_id,
-      content: comment.content,
-      created_at: comment.created_at,
-      author: comment.author_id ? {
-        id: comment.author_id,
-        email: comment.author_email
-      } : null,
-    }));
+    const formattedComments =
+      comments?.map((comment) => ({
+        id: comment.id,
+        issue_id: comment.issue_id,
+        user_id: comment.user_id,
+        content: comment.content,
+        created_at: comment.created_at,
+        author: comment.author,
+      })) || [];
 
     return NextResponse.json(formattedComments);
   } catch (error) {
+    console.error("Error fetching comments:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -50,37 +50,44 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = parseInt(request.headers.get('X-User-Id') || '0');
-    const issueId = parseInt(params.id);
-    
-    if (isNaN(issueId)) {
-      return NextResponse.json({ error: 'Invalid issue ID' }, { status: 400 });
-    }
+    const userId = request.headers.get("X-User-Id") || "";
+    const issueId = params.id;
 
     // Check if issue exists
-    const issue = db.prepare('SELECT id FROM issues WHERE id = ?').get(issueId);
-    if (!issue) {
-      return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
+    const { data: issue, error: issueError } = await supabase
+      .from("issues")
+      .select("id")
+      .eq("id", issueId)
+      .single();
+
+    if (issueError) {
+      if (issueError.code === "PGRST116") {
+        return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+      }
+      throw issueError;
     }
 
     const body = await request.json();
     const { content } = commentSchema.parse(body);
 
-    const result = db.prepare(`
-      INSERT INTO comments (issue_id, user_id, content)
-      VALUES (?, ?, ?)
-    `).run(issueId, userId, content);
+    const { data: comment, error: insertError } = await supabase
+      .from("comments")
+      .insert({
+        issue_id: issueId,
+        user_id: userId,
+        content: content,
+      })
+      .select(
+        `
+        *,
+        author:users!user_id(id, email)
+      `
+      )
+      .single();
 
-    // Get the created comment with user data
-    const comment = db.prepare(`
-      SELECT 
-        c.*,
-        u.id as author_id,
-        u.email as author_email
-      FROM comments c
-      LEFT JOIN users u ON c.user_id = u.id
-      WHERE c.id = ?
-    `).get(result.lastInsertRowid) as any;
+    if (insertError) {
+      throw insertError;
+    }
 
     const formattedComment = {
       id: comment.id,
@@ -88,23 +95,21 @@ export async function POST(
       user_id: comment.user_id,
       content: comment.content,
       created_at: comment.created_at,
-      author: comment.author_id ? {
-        id: comment.author_id,
-        email: comment.author_email
-      } : null,
+      author: comment.author,
     };
 
     return NextResponse.json(formattedComment, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid input', details: error.errors },
+        { error: "Invalid input", details: error.errors },
         { status: 400 }
       );
     }
 
+    console.error("Error creating comment:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

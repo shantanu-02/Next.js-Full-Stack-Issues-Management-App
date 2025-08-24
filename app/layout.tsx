@@ -1,17 +1,13 @@
-import './globals.css';
-import type { Metadata } from 'next/metadata';
-import { Inter } from 'next/font/google';
-import { initDatabase } from '@/lib/database';
+import "./globals.css";
+import type { Metadata } from "next/metadata";
+import { Inter } from "next/font/google";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Issues Tracker - Full Stack Next.js App',
-  description: 'A comprehensive issue tracking system built with Next.js',
+  title: "Issues Tracker - Full Stack Next.js App",
+  description: "A comprehensive issue tracking system built with Next.js",
 };
-
-// Initialize database on startup
-initDatabase();
 
 export default function RootLayout({
   children,

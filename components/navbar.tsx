@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { LogOut, Plus } from 'lucide-react';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { LogOut, Plus, Loader2 } from "lucide-react";
 
 interface NavbarProps {
   user: {
-    id: number;
+    id: string;
     email: string;
     role: string;
   } | null;
@@ -15,11 +16,19 @@ interface NavbarProps {
 
 export function Navbar({ user }: NavbarProps) {
   const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
-    router.refresh();
+    setIsLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   if (!user) return null;
@@ -30,7 +39,7 @@ export function Navbar({ user }: NavbarProps) {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold text-gray-900">Issues Tracker</h1>
-            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+            <Badge variant={user.role === "admin" ? "default" : "secondary"}>
               {user.role}
             </Badge>
           </div>
@@ -40,14 +49,23 @@ export function Navbar({ user }: NavbarProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push('/issues/new')}
+              onClick={() => router.push("/issues/new")}
             >
               <Plus className="h-4 w-4 mr-2" />
               New Issue
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <LogOut className="h-4 w-4 mr-2" />
+              )}
+              {isLoggingOut ? "Logging out..." : "Logout"}
             </Button>
           </div>
         </div>

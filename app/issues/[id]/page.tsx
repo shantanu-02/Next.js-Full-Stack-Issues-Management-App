@@ -1,6 +1,6 @@
-import { IssueDetail } from '@/components/issue-detail';
-import { getUser } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { IssueDetail } from "@/components/issue-detail";
+import { getUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 interface PageProps {
   params: { id: string };
@@ -9,13 +9,10 @@ interface PageProps {
 export default async function IssueDetailPage({ params }: PageProps) {
   const user = await getUser();
   if (!user) {
-    redirect('/login');
+    redirect("/login");
   }
 
-  const issueId = parseInt(params.id);
-  if (isNaN(issueId)) {
-    redirect('/');
-  }
+  const issueId = params.id;
 
   return <IssueDetail issueId={issueId} currentUser={user} />;
 }

@@ -1,29 +1,42 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Edit, MessageSquare, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Edit,
+  MessageSquare,
+  Trash2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 interface User {
-  id: number;
+  id: string;
   email: string;
 }
 
 interface Issue {
-  id: number;
+  id: string;
   title: string;
   description: string;
-  status: 'open' | 'closed';
-  priority: 'low' | 'medium' | 'high';
-  created_by: number;
-  assigned_to?: number;
+  status: "open" | "closed";
+  priority: "low" | "medium" | "high";
+  created_by: string;
+  assigned_to?: string;
   created_at: string;
   updated_at: string;
   author?: User;
@@ -39,7 +52,7 @@ interface Pagination {
 
 interface IssuesListProps {
   currentUser: {
-    id: number;
+    id: string;
     email: string;
     role: string;
   };
@@ -49,17 +62,18 @@ export function IssuesList({ currentUser }: IssuesListProps) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isTogglingStatus, setIsTogglingStatus] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [filters, setFilters] = useState({
-    search: searchParams.get('search') || '',
-    status: searchParams.get('status') || '',
-    priority: searchParams.get('priority') || '',
+    search: searchParams.get("search") || "",
+    status: searchParams.get("status") || "all",
+    priority: searchParams.get("priority") || "all",
   });
 
-  const currentPage = parseInt(searchParams.get('page') || '1');
+  const currentPage = parseInt(searchParams.get("page") || "1");
 
   useEffect(() => {
     fetchIssues();
@@ -70,14 +84,14 @@ export function IssuesList({ currentUser }: IssuesListProps) {
     try {
       const params = new URLSearchParams(searchParams);
       const response = await fetch(`/api/issues?${params}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         setIssues(data.issues);
         setPagination(data.pagination);
       }
     } catch (error) {
-      console.error('Failed to fetch issues:', error);
+      console.error("Failed to fetch issues:", error);
     } finally {
       setIsLoading(false);
     }
@@ -88,92 +102,103 @@ export function IssuesList({ currentUser }: IssuesListProps) {
     setFilters(newFilters);
 
     const params = new URLSearchParams(searchParams);
-    if (value) {
+    if (value && value !== "all") {
       params.set(key, value);
     } else {
       params.delete(key);
     }
-    params.delete('page'); // Reset to first page when filtering
-    
+    params.delete("page"); // Reset to first page when filtering
+
     router.push(`/?${params}`);
   };
 
   const handlePageChange = (page: number) => {
     const params = new URLSearchParams(searchParams);
-    params.set('page', page.toString());
+    params.set("page", page.toString());
     router.push(`/?${params}`);
   };
 
-  const handleDelete = async (issueId: number) => {
-    if (!confirm('Are you sure you want to delete this issue?')) return;
+  const handleDelete = async (issueId: string) => {
+    if (!confirm("Are you sure you want to delete this issue?")) return;
 
     setIsDeleting(issueId);
     try {
       const response = await fetch(`/api/issues/${issueId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (response.ok) {
         // Optimistically remove from list
-        setIssues(issues.filter(issue => issue.id !== issueId));
+        setIssues(issues.filter((issue) => issue.id !== issueId));
       } else {
         const result = await response.json();
-        alert(result.error || 'Failed to delete issue');
+        alert(result.error || "Failed to delete issue");
       }
     } catch (error) {
-      alert('Failed to delete issue');
+      alert("Failed to delete issue");
     } finally {
       setIsDeleting(null);
     }
   };
 
   const toggleStatus = async (issue: Issue) => {
-    const newStatus = issue.status === 'open' ? 'closed' : 'open';
-    
+    const newStatus = issue.status === "open" ? "closed" : "open";
+    setIsTogglingStatus(issue.id);
+
     // Optimistic update
-    setIssues(issues.map(i => 
-      i.id === issue.id ? { ...i, status: newStatus } : i
-    ));
+    setIssues(
+      issues.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
+    );
 
     try {
       const response = await fetch(`/api/issues/${issue.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...issue, status: newStatus }),
       });
 
       if (!response.ok) {
         // Revert optimistic update
-        setIssues(issues.map(i => 
-          i.id === issue.id ? { ...i, status: issue.status } : i
-        ));
+        setIssues(
+          issues.map((i) =>
+            i.id === issue.id ? { ...i, status: issue.status } : i
+          )
+        );
         const result = await response.json();
-        alert(result.error || 'Failed to update issue');
+        alert(result.error || "Failed to update issue");
       }
     } catch (error) {
       // Revert optimistic update
-      setIssues(issues.map(i => 
-        i.id === issue.id ? { ...i, status: issue.status } : i
-      ));
-      alert('Failed to update issue');
+      setIssues(
+        issues.map((i) =>
+          i.id === issue.id ? { ...i, status: issue.status } : i
+        )
+      );
+      alert("Failed to update issue");
+    } finally {
+      setIsTogglingStatus(null);
     }
   };
 
   const canEditIssue = (issue: Issue) => {
-    return currentUser.role === 'admin' || issue.created_by === currentUser.id;
+    return currentUser.role === "admin" || issue.created_by === currentUser.id;
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'destructive';
-      case 'medium': return 'default';
-      case 'low': return 'secondary';
-      default: return 'default';
+      case "high":
+        return "destructive";
+      case "medium":
+        return "default";
+      case "low":
+        return "secondary";
+      default:
+        return "default";
     }
   };
 
   const getStatusColor = (status: string) => {
-    return status === 'open' ? 'default' : 'secondary';
+    return status === "open" ? "default" : "secondary";
   };
 
   if (isLoading) {
@@ -208,20 +233,20 @@ export function IssuesList({ currentUser }: IssuesListProps) {
               <Input
                 placeholder="Search issues..."
                 value={filters.search}
-                onChange={(e) => updateFilters('search', e.target.value)}
+                onChange={(e) => updateFilters("search", e.target.value)}
                 className="pl-10"
               />
             </div>
-            
+
             <Select
               value={filters.status}
-              onValueChange={(value) => updateFilters('status', value)}
+              onValueChange={(value) => updateFilters("status", value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="closed">Closed</SelectItem>
               </SelectContent>
@@ -229,13 +254,13 @@ export function IssuesList({ currentUser }: IssuesListProps) {
 
             <Select
               value={filters.priority}
-              onValueChange={(value) => updateFilters('priority', value)}
+              onValueChange={(value) => updateFilters("priority", value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All Priorities" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Priorities</SelectItem>
+                <SelectItem value="all">All Priorities</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="high">High</SelectItem>
@@ -245,8 +270,8 @@ export function IssuesList({ currentUser }: IssuesListProps) {
             <Button
               variant="outline"
               onClick={() => {
-                setFilters({ search: '', status: '', priority: '' });
-                router.push('/');
+                setFilters({ search: "", status: "all", priority: "all" });
+                router.push("/");
               }}
             >
               Clear Filters
@@ -256,10 +281,21 @@ export function IssuesList({ currentUser }: IssuesListProps) {
       </Card>
 
       {/* Issues List */}
-      {issues.length === 0 ? (
+      {isLoading ? (
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-gray-500">No issues found matching your criteria.</p>
+            <div className="flex flex-col items-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <p className="text-gray-500">Loading issues...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : issues.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-gray-500">
+              No issues found matching your criteria.
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -269,7 +305,7 @@ export function IssuesList({ currentUser }: IssuesListProps) {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle 
+                    <CardTitle
                       className="text-lg mb-2 cursor-pointer hover:text-blue-600 transition-colors"
                       onClick={() => router.push(`/issues/${issue.id}`)}
                     >
@@ -289,16 +325,26 @@ export function IssuesList({ currentUser }: IssuesListProps) {
                       variant="ghost"
                       size="sm"
                       onClick={() => toggleStatus(issue)}
-                      disabled={!canEditIssue(issue)}
+                      disabled={
+                        !canEditIssue(issue) || isTogglingStatus === issue.id
+                      }
                     >
-                      {issue.status === 'open' ? 'Close' : 'Reopen'}
+                      {isTogglingStatus === issue.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : issue.status === "open" ? (
+                        "Close"
+                      ) : (
+                        "Reopen"
+                      )}
                     </Button>
                     {canEditIssue(issue) && (
                       <>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => router.push(`/issues/${issue.id}/edit`)}
+                          onClick={() =>
+                            router.push(`/issues/${issue.id}/edit`)
+                          }
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -323,14 +369,22 @@ export function IssuesList({ currentUser }: IssuesListProps) {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-700 mb-3 line-clamp-2">{issue.description}</p>
+                <p className="text-gray-700 mb-3 line-clamp-2">
+                  {issue.description}
+                </p>
                 <div className="text-sm text-gray-500 space-y-1">
-                  <div>Created by {issue.author?.email} {formatDistanceToNow(new Date(issue.created_at))} ago</div>
+                  <div>
+                    Created by {issue.author?.email}{" "}
+                    {formatDistanceToNow(new Date(issue.created_at))} ago
+                  </div>
                   {issue.assignee && (
                     <div>Assigned to {issue.assignee.email}</div>
                   )}
                   {issue.updated_at !== issue.created_at && (
-                    <div>Updated {formatDistanceToNow(new Date(issue.updated_at))} ago</div>
+                    <div>
+                      Updated {formatDistanceToNow(new Date(issue.updated_at))}{" "}
+                      ago
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -351,21 +405,24 @@ export function IssuesList({ currentUser }: IssuesListProps) {
             <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
-          
+
           <div className="flex items-center space-x-1">
-            {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
-              const page = i + 1;
-              return (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handlePageChange(page)}
-                >
-                  {page}
-                </Button>
-              );
-            })}
+            {Array.from(
+              { length: Math.min(5, pagination.total_pages) },
+              (_, i) => {
+                const page = i + 1;
+                return (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange(page)}
+                  >
+                    {page}
+                  </Button>
+                );
+              }
+            )}
           </div>
 
           <Button

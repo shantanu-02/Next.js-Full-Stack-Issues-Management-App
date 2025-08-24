@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { hash } from 'bcryptjs';
-import { db } from '@/lib/database';
-import { signupSchema } from '@/lib/validations';
-import { encrypt } from '@/lib/auth';
+import { NextRequest, NextResponse } from "next/server";
+import { hash } from "bcryptjs";
+import { supabase } from "@/lib/database";
+import { signupSchema } from "@/lib/validations";
+import { encrypt } from "@/lib/auth";
+import { z } from "zod";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,33 +11,47 @@ export async function POST(request: NextRequest) {
     const { email, password, role } = signupSchema.parse(body);
 
     // Check if user already exists
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const { data: existingUser, error: checkError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single();
+
     if (existingUser) {
       return NextResponse.json(
-        { error: 'User already exists' },
+        { error: "User already exists" },
         { status: 400 }
       );
     }
 
     // Hash password and create user
     const hashedPassword = await hash(password, 12);
-    const result = db.prepare(
-      'INSERT INTO users (email, password, role) VALUES (?, ?, ?)'
-    ).run(email, hashedPassword, role);
+    const { data: newUser, error: insertError } = await supabase
+      .from("users")
+      .insert({
+        email,
+        password: hashedPassword,
+        role: role || "user",
+      })
+      .select("id, email, role")
+      .single();
+
+    if (insertError) {
+      throw insertError;
+    }
 
     // Create session
-    const user = { id: result.lastInsertRowid, email, role };
-    const session = await encrypt({ userId: user.id });
+    const session = await encrypt({ userId: newUser.id });
 
     const response = NextResponse.json(
-      { message: 'User created successfully', user: { id: user.id, email, role } },
+      { message: "User created successfully", user: newUser },
       { status: 201 }
     );
 
-    response.cookies.set('session', session, {
+    response.cookies.set("session", session, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       maxAge: 60 * 60 * 24, // 24 hours
     });
 
@@ -44,13 +59,14 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid input', details: error.errors },
+        { error: "Invalid input", details: error.errors },
         { status: 400 }
       );
     }
 
+    console.error("Error during signup:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
